@@ -39,13 +39,13 @@ export default function ArticleLayout() {
 			<aside
 				className={cn(
 					"md:transition-all",
-					"border-r border-lines md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute top-[58px] h-[92dvh] flex-col justify-between w-[var(--fd-sidebar-width)]",
+					"border-r border-lines top-[43px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(92dvh-7px)] flex-col justify-between w-[var(--fd-sidebar-width)]",
 				)}
 			>
 				<div>
 					<SidebarTab group={group} setGroup={setGroup} />
 					<button
-						className="flex w-full items-center gap-2 px-5 py-2.5 border-b text-muted-foreground bg-gradient-to-b dark:from-stone-900 dark:to-stone/10"
+						className="flex w-full items-center gap-2 px-5 py-2.5 border-b text-muted-foreground dark:bg-zinc-950 dark:border-t-zinc-900/30 dark:border-t"
 						onClick={() => {
 							setOpenSearch(true);
 						}}

@@ -1,15 +1,14 @@
 import { z } from "zod";
 import { createAuthEndpoint } from "../../../api";
-import { ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { isRateLimited } from "../rate-limit";
 import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
+import { defaultKeyHasher } from "../";
 
 export function verifyApiKey({
 	opts,
@@ -68,15 +67,10 @@ export function verifyApiKey({
 				});
 			}
 
-			const hash = await createHash("SHA-256").digest(
-				new TextEncoder().encode(key),
-			);
-			const hashed = base64Url.encode(new Uint8Array(hash), {
-				padding: false,
-			});
+			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
 
 			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "key",
@@ -85,7 +79,7 @@ export function verifyApiKey({
 				],
 			});
 
-			// No api key found
+			// No API key found
 			if (!apiKey) {
 				return ctx.json({
 					valid: false,
@@ -116,7 +110,7 @@ export function verifyApiKey({
 				if (now > expiresAt) {
 					try {
 						ctx.context.adapter.delete({
-							model: schema.apikey.modelName,
+							model: API_KEY_TABLE_NAME,
 							where: [
 								{
 									field: "id",
@@ -144,7 +138,12 @@ export function verifyApiKey({
 
 			const requiredPermissions = ctx.body.permissions;
 			const apiKeyPermissions = apiKey.permissions
-				? safeJSONParse(apiKey.permissions)
+				? safeJSONParse<{
+						[key: string]: string[];
+					}>(
+						//@ts-ignore - from DB, this value is always a string
+						apiKey.permissions,
+					)
 				: null;
 
 			if (requiredPermissions) {
@@ -179,7 +178,7 @@ export function verifyApiKey({
 				// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 				try {
 					ctx.context.adapter.delete({
-						model: schema.apikey.modelName,
+						model: API_KEY_TABLE_NAME,
 						where: [
 							{
 								field: "id",
@@ -239,7 +238,7 @@ export function verifyApiKey({
 				opts,
 			);
 			const newApiKey = await ctx.context.adapter.update<ApiKey>({
-				model: schema.apikey.modelName,
+				model: API_KEY_TABLE_NAME,
 				where: [
 					{
 						field: "id",
@@ -267,13 +266,25 @@ export function verifyApiKey({
 			}
 			deleteAllExpiredApiKeys(ctx.context);
 
-			const { key: _, ...returningApiKey } = newApiKey ?? { key: 1 };
+			const { key: _, ...returningApiKey } = newApiKey ?? {
+				key: 1,
+				permissions: undefined,
+			};
 			if ("metadata" in returningApiKey) {
 				returningApiKey.metadata =
 					schema.apikey.fields.metadata.transform.output(
 						returningApiKey.metadata as never as string,
 					);
 			}
+
+			returningApiKey.permissions = returningApiKey.permissions
+				? safeJSONParse<{
+						[key: string]: string[];
+					}>(
+						//@ts-ignore - from DB, this value is always a string
+						returningApiKey.permissions,
+					)
+				: null;
 
 			return ctx.json({
 				valid: true,

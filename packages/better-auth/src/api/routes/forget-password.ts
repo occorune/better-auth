@@ -108,11 +108,14 @@ export const forgetPassword = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id.toString(),
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			},
+			ctx,
+		);
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${redirectTo}`;
 		await ctx.context.options.emailAndPassword.sendResetPassword(
 			{
@@ -257,7 +260,6 @@ export const resetPassword = createAuthEndpoint(
 				message: BASE_ERROR_CODES.INVALID_TOKEN,
 			});
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
@@ -272,6 +274,10 @@ export const resetPassword = createAuthEndpoint(
 				},
 				ctx,
 			);
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verification.id,
+			);
+
 			return ctx.json({
 				status: true,
 			});
@@ -281,6 +287,10 @@ export const resetPassword = createAuthEndpoint(
 			hashedPassword,
 			ctx,
 		);
+		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
+			await ctx.context.internalAdapter.deleteSessions(userId);
+		}
 		return ctx.json({
 			status: true,
 		});

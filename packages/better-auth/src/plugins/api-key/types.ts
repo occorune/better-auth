@@ -3,16 +3,25 @@ import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
 export interface ApiKeyOptions {
 	/**
-	 * The header name to check for api key
+	 * The header name to check for API key
 	 * @default "x-api-key"
 	 */
 	apiKeyHeaders?: string | string[];
 	/**
-	 * The function to get the api key from the context
+	 * Disable hashing of the API key.
+	 *
+	 * ⚠️ Security Warning: It's strongly recommended to not disable hashing.
+	 * Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+	 *
+	 * @default false
+	 */
+	disableKeyHashing?: boolean;
+	/**
+	 * The function to get the API key from the context
 	 */
 	customAPIKeyGetter?: (ctx: GenericEndpointContext) => string | null;
 	/**
-	 * A custom function to validate the api key
+	 * A custom function to validate the API key
 	 */
 	customAPIKeyValidator?: (options: {
 		ctx: GenericEndpointContext;
@@ -154,7 +163,7 @@ export interface ApiKeyOptions {
 		maxRequests?: number;
 	};
 	/**
-	 * custom schema for the api key plugin
+	 * custom schema for the API key plugin
 	 */
 	schema?: InferOptionSchema<ReturnType<typeof apiKeySchema>>;
 	/**
@@ -242,7 +251,7 @@ export type ApiKey = {
 	 */
 	requestCount: number;
 	/**
-	 * Remaining requests (every time api key is used this should updated and should be updated on refill as well)
+	 * Remaining requests (every time API key is used this should updated and should be updated on refill as well)
 	 */
 	remaining: number | null;
 	/**
@@ -266,7 +275,9 @@ export type ApiKey = {
 	 */
 	metadata: Record<string, any> | null;
 	/**
-	 * Permissions for the api key
+	 * Permissions for the API key
 	 */
-	permissions?: string;
+	permissions?: {
+		[key: string]: string[];
+	} | null;
 };

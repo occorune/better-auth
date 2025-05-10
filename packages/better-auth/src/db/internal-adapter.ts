@@ -160,10 +160,14 @@ export const createInternalAdapter = (
 			});
 			return users;
 		},
-		countTotalUsers: async () => {
+		countTotalUsers: async (where?: Where[]) => {
 			const total = await adapter.count({
 				model: "user",
+				where,
 			});
+			if (typeof total === "string") {
+				return parseInt(total);
+			}
 			return total;
 		},
 		deleteUser: async (userId: string) => {
@@ -204,17 +208,18 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			request: Request | Headers | undefined,
+			ctx: GenericEndpointContext,
 			dontRememberMe?: boolean,
 			override?: Partial<Session> & Record<string, any>,
-			context?: GenericEndpointContext,
 			overrideAll?: boolean,
 		) => {
-			const headers =
-				request && "headers" in request ? request.headers : request;
+			const headers = ctx.headers || ctx.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
-				ipAddress: request ? getIp(request, ctx.options) || "" : "",
+				ipAddress:
+					ctx.request || ctx.headers
+						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
+						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -269,7 +274,7 @@ export const createInternalAdapter = (
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
 					: undefined,
-				context,
+				ctx,
 			);
 			return res as Session;
 		},
@@ -281,26 +286,27 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified) {
+				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
 					return null;
 				}
-
-				const s = JSON.parse(sessionStringified);
-				const parsedSession = parseSessionOutput(ctx.options, {
-					...s.session,
-					expiresAt: new Date(s.session.expiresAt),
-					createdAt: new Date(s.session.createdAt),
-					updatedAt: new Date(s.session.updatedAt),
-				});
-				const parsedUser = parseUserOutput(ctx.options, {
-					...s.user,
-					createdAt: new Date(s.user.createdAt),
-					updatedAt: new Date(s.user.updatedAt),
-				});
-				return {
-					session: parsedSession,
-					user: parsedUser,
-				};
+				if (sessionStringified) {
+					const s = JSON.parse(sessionStringified);
+					const parsedSession = parseSessionOutput(ctx.options, {
+						...s.session,
+						expiresAt: new Date(s.session.expiresAt),
+						createdAt: new Date(s.session.createdAt),
+						updatedAt: new Date(s.session.updatedAt),
+					});
+					const parsedUser = parseUserOutput(ctx.options, {
+						...s.user,
+						createdAt: new Date(s.user.createdAt),
+						updatedAt: new Date(s.user.updatedAt),
+					});
+					return {
+						session: parsedSession,
+						user: parsedUser,
+					};
+				}
 			}
 
 			const session = await adapter.findOne<Session>({
@@ -735,6 +741,22 @@ export const createInternalAdapter = (
 			});
 			return account;
 		},
+		findAccountByProviderId: async (accountId: string, providerId: string) => {
+			const account = await adapter.findOne<Account>({
+				model: "account",
+				where: [
+					{
+						field: "accountId",
+						value: accountId,
+					},
+					{
+						field: "providerId",
+						value: providerId,
+					},
+				],
+			});
+			return account;
+		},
 		findAccountByUserId: async (userId: string) => {
 			const account = await adapter.findMany<Account>({
 				model: "account",
@@ -748,13 +770,13 @@ export const createInternalAdapter = (
 			return account;
 		},
 		updateAccount: async (
-			accountId: string,
+			id: string,
 			data: Partial<Account>,
 			context?: GenericEndpointContext,
 		) => {
 			const account = await updateWithHooks<Account>(
 				data,
-				[{ field: "id", value: accountId }],
+				[{ field: "id", value: id }],
 				"account",
 				undefined,
 				context,
