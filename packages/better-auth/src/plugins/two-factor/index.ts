@@ -153,7 +153,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
 					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
-					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
+					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes, secret });
 				},
 			),
 			disableTwoFactor: createAuthEndpoint(
